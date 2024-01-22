@@ -42,14 +42,15 @@ func handle(conn net.Conn) {
 	if err != nil {
 		panic(err)
 	}
-	ip := r.Answer
-	if len(ip) == 0 {
+	ips := r.Answer
+	if len(ips) == 0 {
 		log.Println("not find ip")
 		return
 	}
 
 	// 转发
-	newConn, err := net.Dial("tcp", ip[0].(*dns.A).A.String()+":443")
+	ip := ips[0].(*dns.A).A.String()
+	newConn, err := net.Dial("tcp", ip+":444")
 	if err != nil {
 		fmt.Println("newConn", err)
 		return
@@ -58,6 +59,7 @@ func handle(conn net.Conn) {
 	signal := make(chan struct{}, 1)
 
 	newConn.Write(tmp[:n])
+	log.Printf("%s <-> %s(%s)", conn.RemoteAddr().String(), s.ServerName, ip+":443")
 	go f(newConn, conn, signal)
 	go f(conn, newConn, signal)
 	<-signal
