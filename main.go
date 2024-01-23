@@ -5,11 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 
 	"darvaza.org/darvaza/shared/tls/sni"
-	"github.com/miekg/dns"
 )
 
 func main() {
@@ -17,7 +16,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("run")
+	slog.Info("run", "listener", ":443")
 	for {
 		conn, _ := lis.Accept()
 		go handle(conn)
@@ -32,34 +31,25 @@ func handle(conn net.Conn) {
 	s, err := sni.ReadClientHelloInfo(context.Background(), bytes.NewReader(tmp[:n]))
 	if err != nil {
 		// 不是https
-		log.Println("not https")
-		return
-	}
-	c := new(dns.Client)
-	m := new(dns.Msg)
-	m.SetQuestion(dns.Fqdn(s.ServerName), dns.TypeA)
-	r, _, err := c.Exchange(m, "8.8.8.8:53")
-	if err != nil {
-		panic(err)
-	}
-	ips := r.Answer
-	if len(ips) == 0 {
-		log.Println("not find ip")
 		return
 	}
 
-	// 转发
-	ip := ips[0].(*dns.A).A.String()
-	newConn, err := net.Dial("tcp", ip+":444")
+	ips, err := QueryDns(s.ServerName)
 	if err != nil {
-		fmt.Println("newConn", err)
+		slog.Error("QueryDns", "err", err)
+	}
+	// 转发
+	ip := ips[0].String()
+	newConn, err := net.Dial("tcp", ip+":443")
+	if err != nil {
+		slog.Error("new conn", "err", err, "remote", conn.RemoteAddr(), "dst", ip, "domain", s.ServerName)
 		return
 	}
 	defer newConn.Close()
 	signal := make(chan struct{}, 1)
 
 	newConn.Write(tmp[:n])
-	log.Printf("%s <-> %s(%s)", conn.RemoteAddr().String(), s.ServerName, ip+":443")
+	slog.Info(fmt.Sprintf("%s <-> %s:443", conn.RemoteAddr(), ip), "remote", conn.RemoteAddr(), "dst", ip, "domain", s.ServerName)
 	go f(newConn, conn, signal)
 	go f(conn, newConn, signal)
 	<-signal
