@@ -11,6 +11,7 @@ require (
 	darvaza.org/core v0.11.3 // indirect
 	darvaza.org/slog v0.5.6 // indirect
 	darvaza.org/slog/handlers/discard v0.4.9 // indirect
+	github.com/Rehtt/Kit v0.1.7-0.20240125030042-94caee0a7f9e // indirect
 	golang.org/x/crypto v0.18.0 // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/net v0.20.0 // indirect

@@ -3,25 +3,24 @@ package main
 import (
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
+	"github.com/Rehtt/Kit/cache"
 	"github.com/miekg/dns"
 )
 
-type dnsNode struct {
-	A   []net.IP
-	TTL time.Time
+var dnsCache *cache.Cache
+
+func init() {
+	dnsCache = cache.NewCache(60*time.Second, 60*time.Second)
 }
 
-var dnsMap sync.Map
-
 func QueryDns(domain string) ([]net.IP, error) {
-	d, ok := dnsMap.Load(domain)
+	d, ok := dnsCache.Get(domain)
 
-	cache, cacheOk := d.(*dnsNode)
-	if ok && cacheOk && cache.TTL.After(time.Now()) {
-		return cache.A, nil
+	cache, cacheOk := d.([]net.IP)
+	if cacheOk && ok {
+		return cache, nil
 	}
 	c := new(dns.Client)
 	m := new(dns.Msg)
@@ -34,16 +33,10 @@ func QueryDns(domain string) ([]net.IP, error) {
 	if len(ips) == 0 {
 		return nil, fmt.Errorf("not find ip")
 	}
-	if cacheOk {
-		cache.A = cache.A[:0]
-	} else {
-		cache = new(dnsNode)
-		cache.A = make([]net.IP, 0, len(ips))
-	}
+
 	for _, v := range ips {
-		cache.A = append(cache.A, v.(*dns.A).A)
+		cache = append(cache, v.(*dns.A).A)
 	}
-	cache.TTL = time.Now().Add(time.Duration(ips[0].Header().Ttl))
-	dnsMap.Store(domain, cache)
-	return cache.A, err
+	dnsCache.Set(domain, cache, time.Duration(ips[0].Header().Ttl)*time.Second)
+	return cache, err
 }
